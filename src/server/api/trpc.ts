@@ -8,6 +8,7 @@
  */
 
 import { TRPCError, initTRPC } from "@trpc/server";
+import { experimental_nextAppDirCaller } from "@trpc/server/adapters/next-app-dir";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
@@ -128,3 +129,13 @@ export const protectedProcedure = t.procedure.use(timingMiddleware).use(({ ctx, 
     },
   });
 });
+
+export const actionProcedure = protectedProcedure.experimental_caller(
+  experimental_nextAppDirCaller({
+    createContext: async () => {
+      return createTRPCContext({
+        headers: new Headers(),
+      });
+    },
+  }),
+);

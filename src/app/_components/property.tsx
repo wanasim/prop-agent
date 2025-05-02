@@ -1,21 +1,28 @@
 "use client";
 
 import { useState } from "react";
-
+import { useFormStatus } from "react-dom";
 import { api } from "~/trpc/react";
+import { createProperty } from "../_action";
+
+const SubmitButton = () => {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="rounded-full bg-white/10 px-10 py-3 font-semibold transition hover:bg-white/20"
+    >
+      {pending ? "Submitting..." : "Submit"}
+    </button>
+  );
+};
 
 export function LatestProperty() {
   const [latestProperty] = api.property.getLatest.useSuspenseQuery();
   const { data: allProperties } = api.property.getAllProperties.useQuery();
 
   const utils = api.useUtils();
-  const [name, setName] = useState("");
-  const createProperty = api.property.create.useMutation({
-    onSuccess: async () => {
-      await utils.property.invalidate();
-      setName("");
-    },
-  });
 
   return (
     <div className="w-full max-w-xs">
@@ -24,27 +31,26 @@ export function LatestProperty() {
       ) : (
         <p>You have no property yet.</p>
       )}
+      {allProperties?.length && <h2>List of All Properties</h2>}{" "}
+      {allProperties?.map((property) => (
+        <p key={property.id}>{property.name}</p>
+      ))}
       <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          createProperty.mutate({ name });
-        }}
         className="flex flex-col gap-2"
+        action={async (formData) => {
+          const name = formData.get("name") as string;
+          await createProperty({ name });
+          await utils.property.invalidate();
+        }}
       >
         <input
           type="text"
           placeholder="Title"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          name="name"
+          required
           className="w-full rounded-full bg-white/10 px-4 py-2 text-white"
         />
-        <button
-          type="submit"
-          className="rounded-full bg-white/10 px-10 py-3 font-semibold transition hover:bg-white/20"
-          disabled={createProperty.isPending}
-        >
-          {createProperty.isPending ? "Submitting..." : "Submit"}
-        </button>
+        <SubmitButton />
       </form>
     </div>
   );
