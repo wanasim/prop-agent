@@ -15,7 +15,7 @@ export const propertyRouter = createTRPCRouter({
       return ctx.db.property.create({
         data: {
           name: input.name,
-          createdBy: { connect: { id: ctx.session.user.id } },
+          ownerId:  ctx.session.user.id,
         },
       });
     }),
@@ -23,7 +23,7 @@ export const propertyRouter = createTRPCRouter({
   getLatest: protectedProcedure.query(async ({ ctx }) => {
     const property = await ctx.db.property.findFirst({
       orderBy: { createdAt: "desc" },
-      where: { createdBy: { id: ctx.session.user.id } },
+      where: { ownerId: ctx.session.user.id } ,
     });
 
     return property ?? null;

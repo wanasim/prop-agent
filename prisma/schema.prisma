@@ -3,6 +3,7 @@
 
 generator client {
     provider = "prisma-client-js"
+    output   = "app/generated/prisma/client"
 }
 
 datasource db {
@@ -14,16 +15,24 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
+enum UserType {
+    TENANT
+    OWNER
+}
+
 model Property {
     id        Int      @id @default(autoincrement())
     name      String
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    createdBy   User   @relation(fields: [createdById], references: [id])
-    createdById String
+    ownerId   String
+    owner     User     @relation("PropertyOwner", fields: [ownerId], references: [id])
+
+    tenants   User[]   @relation("PropertyTenants")
 
     @@index([name])
+    @@index([ownerId])
 }
 
 // Necessary for Next auth
@@ -60,9 +69,15 @@ model User {
     email         String?   @unique
     emailVerified DateTime?
     image         String?
+    userType      UserType  @default(TENANT)
     accounts      Account[]
     sessions      Session[]
-    posts         Property[]
+    
+    // Properties owned by this user
+    ownedProperties Property[] @relation("PropertyOwner")
+    
+    // Properties where this user is a tenant
+    rentedProperties Property[] @relation("PropertyTenants")
 }
 
 model VerificationToken {
