@@ -12,7 +12,7 @@ export const createProperty = actionProcedure
     return ctx.db.property.create({
       data: {
         name: input.name,
-        createdBy: { connect: { id: ctx.session.user.id } },
+        ownerId: ctx.session.user.id,
       },
     });
   });

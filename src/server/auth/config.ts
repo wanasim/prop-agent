@@ -1,8 +1,14 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { DefaultSession, NextAuthConfig } from "next-auth";
+import type { Adapter } from "next-auth/adapters";
 import DiscordProvider from "next-auth/providers/discord";
+import GoogleProvider from "next-auth/providers/google";
+import { env } from "~/env";
+import { db } from "../db";
 
-import { db } from "~/server/db";
+
+export type UserType = "TENANT" | "OWNER";
+
 
 /**
  * Module augmentation for `next-auth` types. Allows us to add custom properties to the `session`
@@ -15,14 +21,19 @@ declare module "next-auth" {
 		user: {
 			id: string;
 			// ...other properties
-			// role: UserRole;
+			userType: UserType | null;
 		} & DefaultSession["user"];
 	}
 
-	// interface User {
-	//   // ...other properties
-	//   // role: UserRole;
-	// }
+	interface User {
+	  // ...other properties
+	  // role: UserRole;
+	  userType: UserType | null;
+	}
+
+	interface JWT {
+		userType: UserType | null;
+	}
 }
 
 /**
@@ -33,6 +44,10 @@ declare module "next-auth" {
 export const authConfig = {
 	providers: [
 		DiscordProvider,
+		GoogleProvider({
+			clientId: env.AUTH_GOOGLE_ID,
+			clientSecret: env.AUTH_GOOGLE_SECRET,
+		})
 		/**
 		 * ...add more providers here.
 		 *
@@ -43,14 +58,32 @@ export const authConfig = {
 		 * @see https://next-auth.js.org/providers/github
 		 */
 	],
-	adapter: PrismaAdapter(db),
+	session: {
+		strategy: "jwt",
+	},
+	pages: {
+		newUser: '/onboarding',
+	},
 	callbacks: {
-		session: ({ session, user }) => ({
+		session: ({ session, token, }) => {
+			console.log("SESSION@2222222", session)
+			console.log("TOKEN@2222222", token)
+			return {
 			...session,
 			user: {
 				...session.user,
-				id: user.id,
+				id: token.sub,
+				userType: token.userType as UserType | null,
 			},
-		}),
+		}},
+		jwt: ({ token, user }) => {
+			console.log("TOKEN@3333333", token)
+			console.log("USER@3333333", user)
+				if (user?.userType) {
+					token.userType = user.userType;
+				}
+
+			return token;
+		},
 	},
 } satisfies NextAuthConfig;

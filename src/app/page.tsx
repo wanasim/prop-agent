@@ -9,6 +9,7 @@ export default async function Home() {
   const session = await auth();
 
   if (session?.user) {
+    console.log("session!@#!@#!@#!@#!@#", session);
     void api.property.getAllProperties.prefetch();
     void api.property.getLatest.prefetch();
   }

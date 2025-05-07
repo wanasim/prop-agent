@@ -24,6 +24,7 @@ export function LatestProperty() {
   const { data: allProperties } = api.property.getAllProperties.useQuery();
 
   const utils = api.useUtils();
+  
 
   return (
     <div className="w-full max-w-xs">
