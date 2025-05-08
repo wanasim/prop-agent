@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { api } from "~/trpc/react";
-import { createProperty } from "../_action";
+import { createProperty } from "../app/_action";
 
 const SubmitButton = () => {
   const { pending } = useFormStatus();
@@ -24,7 +24,6 @@ export function LatestProperty() {
   const { data: allProperties } = api.property.getAllProperties.useQuery();
 
   const utils = api.useUtils();
-  
 
   return (
     <div className="w-full max-w-xs">

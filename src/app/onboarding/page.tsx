@@ -11,13 +11,16 @@ import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { api } from "~/trpc/react";
 
-type FormMeta = {
-  submitAction: "next" | "previous" | "finish" | null;
-};
+const metaSchema = z.object({
+  submitAction: z.enum(["next", "previous", "finish"]).nullable(),
+});
 
-const defaultMeta: FormMeta = {
-  submitAction: null,
-};
+const formSchema = z.object({
+  userType: z.enum(["OWNER", "TENANT"]).optional(),
+  properties: z.array(z.object({ name: z.string() })),
+  selectedProperty: z.number().optional(),
+  currentStep: z.number(),
+});
 
 const { fieldContext, formContext, useFormContext } = createFormHookContexts();
 
@@ -34,16 +37,22 @@ const { useAppForm } = createFormHook({
 });
 
 export default function OnboardingPage() {
+  // /** move this inside onsubmit handler in useappform */
+  const { mutate: updateUserType } = api.user.update.useMutation();
+
   const form = useAppForm({
-    defaultValues: {
-      userType: undefined as "OWNER" | "TENANT" | undefined,
+    defaultValues: formSchema.parse({
+      userType: undefined,
       properties: [{ name: "" }],
-      selectedProperty: undefined as string | undefined,
+      selectedProperty: undefined,
       currentStep: 0,
-    },
-    onSubmitMeta: defaultMeta,
+    }),
+
+    onSubmitMeta: metaSchema.parse({
+      submitAction: null,
+    }),
     onSubmit: async ({ value, meta }) => {
-      console.log("value on submit", value);
+      console.log("onsubmitvalue", value, meta);
       switch (meta.submitAction) {
         case "next":
           form.setFieldValue("currentStep", form.getFieldValue("currentStep") + 1);
@@ -54,9 +63,13 @@ export default function OnboardingPage() {
         case "finish":
           console.log("submit");
           // handle submit and redirect to dashboard
+          updateUserType({
+            userType: value.userType as "OWNER" | "TENANT",
+            properties: value.properties,
+            selectedProperty: value.selectedProperty as number,
+          });
           break;
         default:
-          console.log("default");
           console.error("Invalid submit action", meta.submitAction);
           break;
       }
@@ -67,23 +80,8 @@ export default function OnboardingPage() {
 
   const { data: properties } = api.property.getAllProperties.useQuery();
 
-  /** move this inside onsubmit handler in useappform */
-  const { mutate: updateUserType } = api.user.update.useMutation({
-    onSuccess: () => {
-      const currentStep = form.getFieldValue("currentStep");
-      if (currentStep < totalSteps - 1) {
-        form.setFieldValue("currentStep", currentStep + 1);
-      }
-    },
-  });
-
-  /** move this inside onsubmit handler in useappform */
-  const { mutate: createProperty } = api.property.create.useMutation();
-
-  const addProperty = () => {
-    const properties = form.getFieldValue("properties") || [];
-    form.setFieldValue("properties", [...properties, { name: "" }]);
-  };
+  // /** move this inside onsubmit handler in useappform */
+  // const { mutate: createProperty } = api.property.create.useMutation();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
@@ -99,16 +97,20 @@ export default function OnboardingPage() {
             }}
             className="space-y-6"
           >
-            <form.Subscribe selector={(state) => state.values.currentStep}>
-              {(currentStep) => (
+            <form.Subscribe
+              selector={(state) => ({
+                currentStep: state.values.currentStep,
+                userType: state.values.userType,
+              })}
+            >
+              {({ currentStep, userType }) => (
                 <>
-                  {console.log("currentStep new value!!!", currentStep)}
                   {currentStep === 0 && (
                     <form.Field
                       name="userType"
                       validators={{
                         onChange: ({ value }) => {
-                          if (!value) {
+                          if (!value && currentStep === 0) {
                             return "Please select a user type";
                           }
                           return undefined;
@@ -134,7 +136,7 @@ export default function OnboardingPage() {
                             </div>
                           </RadioGroup>
                           {field.state.meta.errors && (
-                            <p className="text-sm text-red-500">
+                            <p className="text-red-500 text-sm">
                               {field.state.meta.errors.join(", ")}
                             </p>
                           )}
@@ -143,25 +145,62 @@ export default function OnboardingPage() {
                     </form.Field>
                   )}
 
-                  {currentStep === 1 && form.getFieldValue("userType") === "OWNER" && (
-                    <form.Field name="properties">
+                  {currentStep === 1 && userType === "OWNER" && (
+                    <form.Field name="properties" mode="array">
                       {(field) => (
                         <div className="space-y-4">
                           <Label>Add your properties</Label>
                           {field.state.value.map((property: { name: string }, index: number) => (
-                            <div key={`property-${index}-${property.name}`} className="flex gap-2">
-                              <form.Field name={`properties[${index}].name`}>
+                            <div
+                              key={`property-${index}-${property.name}`}
+                              className="flex flex-col gap-2"
+                            >
+                              <form.Field
+                                name={`properties[${index}].name`}
+                                validators={{
+                                  onChange: ({ value: property }) => {
+                                    if (currentStep === 1 && userType === "OWNER") {
+                                      if (!property.length) {
+                                        return "Must have a name";
+                                      }
+                                    }
+                                    return undefined;
+                                  },
+                                }}
+                              >
                                 {(nameField) => (
-                                  <Input
-                                    value={nameField.state.value}
-                                    onChange={(e) => nameField.handleChange(e.target.value)}
-                                    placeholder="Property name"
-                                  />
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex gap-2">
+                                      <Input
+                                        value={nameField.state.value}
+                                        onChange={(e) => nameField.handleChange(e.target.value)}
+                                        placeholder="Property name"
+                                      />
+                                      <Button
+                                        type="button"
+                                        variant="destructive"
+                                        onClick={() => field.removeValue(index)}
+                                      >
+                                        Remove
+                                      </Button>
+                                    </div>
+                                    <div>
+                                      {nameField.state.meta.errors && (
+                                        <p className="text-red-500 text-sm">
+                                          {nameField.state.meta.errors.join(", ")}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
                                 )}
                               </form.Field>
                             </div>
                           ))}
-                          <Button type="button" variant="outline" onClick={addProperty}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => field.pushValue({ name: "" })}
+                          >
                             Add Another Property
                           </Button>
                         </div>
@@ -169,12 +208,31 @@ export default function OnboardingPage() {
                     </form.Field>
                   )}
 
-                  {currentStep === 1 && form.getFieldValue("userType") === "TENANT" && (
-                    <form.Field name="selectedProperty">
+                  {currentStep === 1 && userType === "TENANT" && (
+                    <form.Field
+                      name="selectedProperty"
+                      validators={{
+                        onChange: ({ value }) => {
+                          console.log("value for selectedProperty", value);
+                          // Only validate if we're on step 1
+                          if (currentStep === 1 && userType === "TENANT") {
+                            const result = z.string().safeParse(value);
+                            if (!result.success) {
+                              return "Please select a property";
+                            }
+                          }
+                          return undefined;
+                        },
+                      }}
+                    >
                       {(field) => (
                         <div className="space-y-4">
                           <Label>Select a property</Label>
-                          <RadioGroup value={field.state.value} onValueChange={field.handleChange}>
+
+                          <RadioGroup
+                            value={String(field.state.value)}
+                            onValueChange={(value) => field.handleChange(Number(value))}
+                          >
                             {properties?.map((property) => (
                               <div key={property.id} className="flex items-center space-x-2">
                                 <RadioGroupItem
@@ -226,9 +284,6 @@ export default function OnboardingPage() {
 export function ActionsButtons({ label }: { label?: string }) {
   const form = useFormContext();
 
-  const firstName = useStore(form.store, (state) => state.values.firstName);
-  const { userType, properties, selectedProperty, currentStep } = form.state.values;
-  console.log("currentStep!@#s", currentStep);
   return (
     <form.Subscribe
       selector={(state) => ({
@@ -255,6 +310,7 @@ export function ActionsButtons({ label }: { label?: string }) {
             disabled={isSubmitting}
             type="submit"
             onClick={() => {
+              console.log("nexting");
               (currentStep as unknown as number) < 2
                 ? form.handleSubmit({ submitAction: "next" })
                 : form.handleSubmit({ submitAction: "finish" });
