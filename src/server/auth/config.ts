@@ -4,7 +4,6 @@ import type { Adapter } from "next-auth/adapters";
 import DiscordProvider from "next-auth/providers/discord";
 import GoogleProvider from "next-auth/providers/google";
 import { env } from "~/env";
-import { db } from "../db";
 
 export type UserType = "TENANT" | "OWNER";
 
@@ -74,6 +73,8 @@ export const authConfig = {
       };
     },
     jwt: ({ token, user }) => {
+      console.log("user", user);
+      console.log("token", token);
       if (user?.userType) {
         token.userType = user.userType;
       }

@@ -7,27 +7,9 @@ import { authConfig } from "./server/auth/config";
  */
 const { auth } = NextAuth(authConfig);
 
-export default auth((req) => {
-  // Skip middleware for onboarding page
-  if (req.nextUrl.pathname === "/onboarding") {
-    return NextResponse.next();
-  }
-
-  const userType = req.auth?.user.userType;
-
+export default auth(async (req) => {
   // If no session, redirect to sign in
   if (!req.auth) {
-    return NextResponse.redirect(new URL("/api/auth/signin", req.url));
-  }
-
-  // If user has no userType, redirect to onboarding
-  if (!userType) {
-    return NextResponse.redirect(new URL("/onboarding", req.url));
-  }
-
-  /** TODO: ADD THIS BACK IN??? */
-  // // If user is on onboarding page but has userType, redirect to home
-  if (req.nextUrl.pathname === "/onboarding" && userType) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 

@@ -2,6 +2,7 @@
 
 import { createFormHook, createFormHookContexts, useForm, useStore } from "@tanstack/react-form";
 import { signIn } from "next-auth/react";
+import { redirect } from "next/navigation";
 import { useState } from "react";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
@@ -38,7 +39,11 @@ const { useAppForm } = createFormHook({
 
 export default function OnboardingPage() {
   // /** move this inside onsubmit handler in useappform */
-  const { mutate: updateUserType } = api.user.update.useMutation();
+  const { mutate: updateUserType } = api.user.update.useMutation({
+    onSuccess: () => {
+      redirect("/");
+    },
+  });
 
   const form = useAppForm({
     defaultValues: formSchema.parse({

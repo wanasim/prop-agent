@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { LatestProperty } from "~/app/_components/property";
+import { LatestProperty } from "~/components/property";
 import { auth } from "~/server/auth";
 import { HydrateClient, api } from "~/trpc/server";
 
