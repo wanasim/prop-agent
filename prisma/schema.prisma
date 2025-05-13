@@ -56,9 +56,9 @@ model User {
   image            String?
   userType         UserType?
   accounts         Account[]
-  ownedProperties  Property[] @relation("PropertyOwner")
+  ownedProperties  Property[] @relation("PropertyOwner", onDelete: Cascade)
   sessions         Session[]
-  rentedProperties Property[] @relation("PropertyTenants")
+  rentedProperties Property[] @relation("PropertyTenants", onDelete: Cascade)
 }
 
 model VerificationToken {

@@ -7,9 +7,9 @@ import { authConfig } from "./server/auth/config";
  */
 const { auth } = NextAuth(authConfig);
 
-export default auth(async (req) => {
-  // If no session, redirect to sign in
-  if (!req.auth) {
+export default auth((req) => {
+  /** Non-authenticated users or users with a userType are redirected to the home page */
+  if ((!req.auth || !!req.auth?.user?.userType) && req.url.includes("/onboarding")) {
     return NextResponse.redirect(new URL("/", req.url));
   }
 

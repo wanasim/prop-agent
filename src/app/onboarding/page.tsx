@@ -1,15 +1,25 @@
 "use client";
 
 import { createFormHook, createFormHookContexts, useForm, useStore } from "@tanstack/react-form";
-import { signIn } from "next-auth/react";
+import { TableProperties } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { api } from "~/trpc/react";
 
 const metaSchema = z.object({
@@ -18,12 +28,12 @@ const metaSchema = z.object({
 
 const formSchema = z.object({
   userType: z.enum(["OWNER", "TENANT"]).optional(),
-  properties: z.array(z.object({ name: z.string() })),
+  properties: z.array(z.object({ name: z.string() })).optional(),
   selectedProperty: z.number().optional(),
-  currentStep: z.number(),
+  currentStep: z.number().default(0),
 });
 
-const { fieldContext, formContext, useFormContext } = createFormHookContexts();
+const { fieldContext, formContext, useFormContext, useFieldContext } = createFormHookContexts();
 
 const { useAppForm } = createFormHook({
   fieldComponents: {
@@ -37,11 +47,15 @@ const { useAppForm } = createFormHook({
   formContext,
 });
 
+type FormMeta = {
+  submitAction: "next" | "previous" | "finish" | null;
+  currentStep: number;
+};
+
 export default function OnboardingPage() {
-  // /** move this inside onsubmit handler in useappform */
   const { mutate: updateUserType } = api.user.update.useMutation({
     onSuccess: () => {
-      redirect("/");
+      redirect("/dashboard");
     },
   });
 
@@ -52,45 +66,31 @@ export default function OnboardingPage() {
       selectedProperty: undefined,
       currentStep: 0,
     }),
-
     onSubmitMeta: metaSchema.parse({
       submitAction: null,
     }),
+
     onSubmit: async ({ value, meta }) => {
-      console.log("onsubmitvalue", value, meta);
-      switch (meta.submitAction) {
-        case "next":
-          form.setFieldValue("currentStep", form.getFieldValue("currentStep") + 1);
-          break;
-        case "previous":
-          form.setFieldValue("currentStep", form.getFieldValue("currentStep") - 1);
-          break;
-        case "finish":
-          console.log("submit");
-          // handle submit and redirect to dashboard
-          updateUserType({
-            userType: value.userType as "OWNER" | "TENANT",
-            properties: value.properties,
-            selectedProperty: value.selectedProperty as number,
-          });
-          break;
-        default:
-          console.error("Invalid submit action", meta.submitAction);
-          break;
+      if (meta.submitAction === "next") {
+        form.setFieldValue("currentStep", value.currentStep + 1);
+      } else if (meta.submitAction === "previous") {
+        form.setFieldValue("currentStep", value.currentStep - 1);
+      } else if (meta.submitAction === "finish") {
+        updateUserType({
+          userType: value.userType as "OWNER" | "TENANT",
+          properties: value.properties,
+          selectedProperty: value.selectedProperty as number,
+        });
       }
     },
   });
 
-  const totalSteps = 3;
-
+  const totalSteps = 2;
   const { data: properties } = api.property.getAllProperties.useQuery();
-
-  // /** move this inside onsubmit handler in useappform */
-  // const { mutate: createProperty } = api.property.create.useMutation();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <Card className="w-[400px]">
+      <Card className="w-[400px] max-w-[90vw]">
         <CardHeader>
           <CardTitle>Welcome to Prop Agent</CardTitle>
         </CardHeader>
@@ -98,25 +98,26 @@ export default function OnboardingPage() {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              e.stopPropagation();
             }}
             className="space-y-6"
           >
             <form.Subscribe
               selector={(state) => ({
-                currentStep: state.values.currentStep,
                 userType: state.values.userType,
+                currentStep: state.values.currentStep,
               })}
             >
-              {({ currentStep, userType }) => (
+              {({ userType, currentStep }) => (
                 <>
                   {currentStep === 0 && (
                     <form.Field
                       name="userType"
                       validators={{
                         onChange: ({ value }) => {
-                          if (!value && currentStep === 0) {
-                            return "Please select a user type";
+                          if (currentStep === 0) {
+                            if (!value) {
+                              return "Please select a user type";
+                            }
                           }
                           return undefined;
                         },
@@ -155,7 +156,7 @@ export default function OnboardingPage() {
                       {(field) => (
                         <div className="space-y-4">
                           <Label>Add your properties</Label>
-                          {field.state.value.map((property: { name: string }, index: number) => (
+                          {field.state.value?.map((property: { name: string }, index: number) => (
                             <div
                               key={`property-${index}-${property.name}`}
                               className="flex flex-col gap-2"
@@ -163,9 +164,14 @@ export default function OnboardingPage() {
                               <form.Field
                                 name={`properties[${index}].name`}
                                 validators={{
-                                  onChange: ({ value: property }) => {
+                                  onBlur: ({ value: property }) => {
+                                    /** might not neeed to ref usertype again here */
                                     if (currentStep === 1 && userType === "OWNER") {
-                                      if (!property.length) {
+                                      if (!property?.length) {
+                                        console.log(
+                                          "MUST HAVE A NAME and currentStep",
+                                          currentStep,
+                                        );
                                         return "Must have a name";
                                       }
                                     }
@@ -177,6 +183,7 @@ export default function OnboardingPage() {
                                   <div className="flex flex-col gap-1">
                                     <div className="flex gap-2">
                                       <Input
+                                        onBlur={() => nameField.handleBlur()}
                                         value={nameField.state.value}
                                         onChange={(e) => nameField.handleChange(e.target.value)}
                                         placeholder="Property name"
@@ -218,11 +225,8 @@ export default function OnboardingPage() {
                       name="selectedProperty"
                       validators={{
                         onChange: ({ value }) => {
-                          console.log("value for selectedProperty", value);
-                          // Only validate if we're on step 1
-                          if (currentStep === 1 && userType === "TENANT") {
-                            const result = z.string().safeParse(value);
-                            if (!result.success) {
+                          if (currentStep === 1) {
+                            if (!value) {
                               return "Please select a property";
                             }
                           }
@@ -232,22 +236,35 @@ export default function OnboardingPage() {
                     >
                       {(field) => (
                         <div className="space-y-4">
-                          <Label>Select a property</Label>
-
-                          <RadioGroup
+                          <Label>Select a property to rent:</Label>
+                          <Select
                             value={String(field.state.value)}
                             onValueChange={(value) => field.handleChange(Number(value))}
                           >
-                            {properties?.map((property) => (
-                              <div key={property.id} className="flex items-center space-x-2">
-                                <RadioGroupItem
-                                  value={String(property.id)}
-                                  id={String(property.id)}
-                                />
-                                <Label htmlFor={String(property.id)}>{property.name}</Label>
-                              </div>
-                            ))}
-                          </RadioGroup>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select a property" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                <SelectLabel>Properties</SelectLabel>
+                                {properties?.map((property) => (
+                                  <SelectItem key={property.id} value={String(property.id)}>
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{property.name}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        ID: {property.id}
+                                      </span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          {field.state.meta.errors && (
+                            <p className="text-red-500 text-sm">
+                              {field.state.meta.errors.join(", ")}
+                            </p>
+                          )}
                         </div>
                       )}
                     </form.Field>
@@ -258,14 +275,18 @@ export default function OnboardingPage() {
 
             <div className="flex justify-between">
               <form.AppForm>
-                <form.ActionsButtons />
+                <ActionsButtons />
               </form.AppForm>
             </div>
           </form>
         </CardContent>
         <CardFooter className="flex justify-center gap-2">
-          <form.Subscribe selector={(state) => state.values.currentStep}>
-            {(currentStep) => (
+          <form.Subscribe
+            selector={(state) => ({
+              currentStep: state.values.currentStep,
+            })}
+          >
+            {({ currentStep }) => (
               <>
                 {Array.from({ length: totalSteps }).map((_, index) => (
                   <button
@@ -277,6 +298,7 @@ export default function OnboardingPage() {
                     aria-label={`Go to step ${index + 1}`}
                   />
                 ))}
+                <div>{form.state.errors}</div>
               </>
             )}
           </form.Subscribe>
@@ -286,45 +308,45 @@ export default function OnboardingPage() {
   );
 }
 
-export function ActionsButtons({ label }: { label?: string }) {
+export function ActionsButtons() {
   const form = useFormContext();
 
   return (
     <form.Subscribe
       selector={(state) => ({
         isSubmitting: state.isSubmitting,
-        userType: state.values.userType,
-        currentStep: state.values.currentStep,
+        currentStep: state.values.currentStep as unknown as number,
+        userType: state.values.userType as unknown as string,
       })}
     >
-      {({ isSubmitting, currentStep }) => (
-        <>
+      {({ isSubmitting, currentStep, userType }) => (
+        <div className="flex w-full justify-between">
           {currentStep !== 0 && (
             <Button
               disabled={isSubmitting}
-              type="submit"
+              type="button"
+              variant="outline"
               onClick={() => {
-                console.log("previous button");
-                form.handleSubmit({ submitAction: "previous" });
+                form.setFieldValue("currentStep" as never, (currentStep - 1) as never);
+                // form.handleSubmit({ submitAction: "previous" });
               }}
             >
               Previous
             </Button>
           )}
+          <div className="flex-1" /> {/* Spacer */}
           <Button
-            disabled={isSubmitting}
+            disabled={isSubmitting || !userType}
             type="submit"
             onClick={() => {
-              console.log("nexting");
-              (currentStep as unknown as number) < 2
-                ? form.handleSubmit({ submitAction: "next" })
+              currentStep < 1
+                ? form.setFieldValue("currentStep" as never, (currentStep + 1) as never)
                 : form.handleSubmit({ submitAction: "finish" });
             }}
           >
-            {currentStep}
-            {(currentStep as unknown as number) < 2 ? "Next" : "Finish"}
+            {currentStep < 1 ? "Next" : "Finish"}
           </Button>
-        </>
+        </div>
       )}
     </form.Subscribe>
   );

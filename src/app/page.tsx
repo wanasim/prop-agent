@@ -5,14 +5,7 @@ import { auth } from "~/server/auth";
 import { HydrateClient, api } from "~/trpc/server";
 
 export default async function Home() {
-  const hello = await api.property.hello({ text: "from tRPC" });
   const session = await auth();
-
-  if (session?.user) {
-    console.log("session!@#!@#!@#!@#!@#", session);
-    void api.property.getAllProperties.prefetch();
-    void api.property.getLatest.prefetch();
-  }
 
   return (
     <HydrateClient>
@@ -23,10 +16,6 @@ export default async function Home() {
           </h1>
 
           <div className="flex flex-col items-center gap-2">
-            <p className="text-2xl text-white">
-              {hello ? hello.greeting : "Loading tRPC query..."}
-            </p>
-
             <div className="flex flex-col items-center justify-center gap-4">
               <p className="text-center text-2xl text-white">
                 {session && <span>Logged in as {session.user?.name}</span>}
@@ -39,8 +28,6 @@ export default async function Home() {
               </Link>
             </div>
           </div>
-
-          {session?.user && <LatestProperty />}
         </div>
       </main>
     </HydrateClient>
