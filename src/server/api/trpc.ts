@@ -130,12 +130,22 @@ export const protectedProcedure = t.procedure.use(timingMiddleware).use(({ ctx, 
   });
 });
 
-export const actionProcedure = protectedProcedure.experimental_caller(
+export const protectedActionProcedure = protectedProcedure.experimental_caller(
   experimental_nextAppDirCaller({
     createContext: async () => {
       return createTRPCContext({
         headers: new Headers(),
       });
     },
-  }),
+  })
+);
+
+export const publicActionProcedure = publicProcedure.experimental_caller(
+  experimental_nextAppDirCaller({
+    createContext: async () => {
+      return createTRPCContext({
+        headers: new Headers(),
+      });
+    },
+  })
 );

@@ -3,7 +3,7 @@
 import { createFormHook, createFormHookContexts, useForm, useStore } from "@tanstack/react-form";
 import { TableProperties } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
+import { redirect, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "~/components/ui/button";
@@ -23,7 +23,7 @@ import {
 import { api } from "~/trpc/react";
 
 const metaSchema = z.object({
-  submitAction: z.enum(["next", "previous", "finish"]).nullable(),
+  submitAction: z.enum(["next", "previous", "submit"]).nullable(),
 });
 
 const formSchema = z.object({
@@ -47,15 +47,11 @@ const { useAppForm } = createFormHook({
   formContext,
 });
 
-type FormMeta = {
-  submitAction: "next" | "previous" | "finish" | null;
-  currentStep: number;
-};
-
 export default function OnboardingPage() {
+  const router = useRouter();
   const { mutate: updateUserType } = api.user.update.useMutation({
     onSuccess: () => {
-      redirect("/dashboard");
+      router.push("/dashboard");
     },
   });
 
@@ -75,8 +71,8 @@ export default function OnboardingPage() {
         form.setFieldValue("currentStep", value.currentStep + 1);
       } else if (meta.submitAction === "previous") {
         form.setFieldValue("currentStep", value.currentStep - 1);
-      } else if (meta.submitAction === "finish") {
-        updateUserType({
+      } else if (meta.submitAction === "submit") {
+        await updateUserType({
           userType: value.userType as "OWNER" | "TENANT",
           properties: value.properties,
           selectedProperty: value.selectedProperty as number,
@@ -170,7 +166,7 @@ export default function OnboardingPage() {
                                       if (!property?.length) {
                                         console.log(
                                           "MUST HAVE A NAME and currentStep",
-                                          currentStep,
+                                          currentStep
                                         );
                                         return "Must have a name";
                                       }
@@ -341,10 +337,10 @@ export function ActionsButtons() {
             onClick={() => {
               currentStep < 1
                 ? form.setFieldValue("currentStep" as never, (currentStep + 1) as never)
-                : form.handleSubmit({ submitAction: "finish" });
+                : form.handleSubmit({ submitAction: "submit" });
             }}
           >
-            {currentStep < 1 ? "Next" : "Finish"}
+            {isSubmitting ? "Submitting..." : currentStep < 1 ? "Next" : "Submit"}
           </Button>
         </div>
       )}

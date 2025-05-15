@@ -14,11 +14,20 @@ model Property {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   ownerId   String
-  owner     User     @relation("PropertyOwner", fields: [ownerId], references: [id])
-  tenants   User[]   @relation("PropertyTenants")
+  owner     User     @relation("PropertyOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  tenants   PropertyTenant[]
 
   @@index([name])
   @@index([ownerId])
+}
+
+model PropertyTenant {
+  propertyId Int
+  userId     String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, userId])
 }
 
 model Account {
@@ -51,14 +60,15 @@ model Session {
 model User {
   id               String     @id @default(cuid())
   name             String?
+  password         String?
   email            String?    @unique
   emailVerified    DateTime?
   image            String?
   userType         UserType?
   accounts         Account[]
-  ownedProperties  Property[] @relation("PropertyOwner", onDelete: Cascade)
+  ownedProperties  Property[] @relation("PropertyOwner")
   sessions         Session[]
-  rentedProperties Property[] @relation("PropertyTenants", onDelete: Cascade)
+  rentedProperties PropertyTenant[]
 }
 
 model VerificationToken {

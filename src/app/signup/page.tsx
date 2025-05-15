@@ -1,7 +1,7 @@
 "use client";
 
 import { IconBrandDiscord, IconBrandGoogle } from "@tabler/icons-react";
-import { createFormHook, createFormHookContexts } from "@tanstack/react-form";
+import { createFormHook, createFormHookContexts, useForm } from "@tanstack/react-form";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -10,10 +10,12 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { signUp } from "../_action";
 
 const formSchema = z.object({
+  name: z.string().min(1, "Name is required"),
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().nonempty("Please enter a password"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 const { fieldContext, formContext, useFormContext } = createFormHookContexts();
@@ -22,39 +24,69 @@ const { useAppForm } = createFormHook({
   fieldComponents: {
     Input,
   },
-  formComponents: {},
+  formComponents: {
+    Button,
+  },
   fieldContext,
   formContext,
 });
 
-export default function SignInPage() {
+export default function SignUpPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
 
   const form = useAppForm({
     defaultValues: {
+      name: "",
       email: "",
       password: "",
     },
     onSubmit: async ({ value }) => {
-      console.log("value", value);
-      try {
-        const result = await signIn("credentials", {
-          email: value.email,
-          password: value.password,
-          redirect: false,
-        });
-        console.log("result", result);
+      const signupresult = await signUp(value);
+      console.log("signupresult", signupresult);
+      // Then sign in the user
+      console.log("signing in?", value);
+      const result = await signIn("credentials", {
+        email: value.email,
+        password: value.password,
+        redirect: true,
+        callbackUrl: "/onboarding",
+      });
 
-        if (result?.error) {
-          throw new Error(result.error);
-        }
+      console.log("succesfuly signed in", result);
 
-        router.push("/dashboard");
-      } catch (error) {
-        console.log("error!@#!@#", error);
-        setError(error instanceof Error ? error.message : "Something went wrong");
+      if (result?.error) {
+        throw new Error(result.error);
       }
+      console.log("pushing to onboarding");
+      // router.push("/onboarding");
+      // try {
+      //   const response = await fetch("/api/auth/register", {
+      //     method: "POST",
+      //     headers: { "Content-Type": "application/json" },
+      //     body: JSON.stringify(value),
+      //   });
+
+      //   if (!response.ok) {
+      //     const data = await response.json();
+      //     throw new Error(data.message || "Something went wrong");
+      //   }
+
+      //   // Sign in the user after successful registration
+      //   const result = await signIn("credentials", {
+      //     email: value.email,
+      //     password: value.password,
+      //     redirect: false,
+      //   });
+
+      //   if (result?.error) {
+      //     throw new Error(result.error);
+      //   }
+
+      //   window.location.href = "/dashboard";
+      // } catch (error) {
+      //   setError(error instanceof Error ? error.message : "Something went wrong");
+      // }
     },
   });
 
@@ -62,25 +94,55 @@ export default function SignInPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Welcome Back</CardTitle>
-          <CardDescription>Sign in to your account to continue</CardDescription>
+          <CardTitle>Create Your Account</CardTitle>
+          <CardDescription>Join Prop Agent to start managing your properties</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {/* Email Sign In Form */}
+            {/* Email Sign Up Form */}
             <div>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  form.handleSubmit();
                 }}
                 className="space-y-4"
               >
+                <form.Field
+                  name="name"
+                  validators={{
+                    onChange: ({ value }) => {
+                      const result = formSchema.shape.name.safeParse(value);
+                      console.log("result", result);
+                      return result.success ? undefined : result.error.issues?.[0]?.message;
+                    },
+                  }}
+                >
+                  {(field) => (
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name</Label>
+                      <Input
+                        id="name"
+                        value={field.state.value}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        onBlur={field.handleBlur}
+                        placeholder="John Doe"
+                        disabled={form.state.isSubmitting}
+                      />
+                      {field.state.meta.errors && (
+                        <p className="text-sm text-destructive">
+                          {field.state.meta.errors.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </form.Field>
+
                 <form.Field
                   name="email"
                   validators={{
                     onChange: ({ value }) => {
                       const result = formSchema.shape.email.safeParse(value);
+                      console.log("result", result);
                       return result.success ? undefined : result.error.issues?.[0]?.message;
                     },
                   }}
@@ -135,14 +197,14 @@ export default function SignInPage() {
                 </form.Field>
 
                 {error && <div className="text-sm text-destructive">{error}</div>}
-
                 <form.AppForm>
                   <Button
                     type="submit"
                     className="w-full bg-primary"
                     disabled={form.state.isSubmitting}
+                    onClick={() => form.handleSubmit()}
                   >
-                    {form.state.isSubmitting ? "Signing in..." : "Sign In"}
+                    {form.state.isSubmitting ? "Creating account..." : "Create Account"}
                   </Button>
                 </form.AppForm>
               </form>
@@ -164,11 +226,12 @@ export default function SignInPage() {
                 onClick={() =>
                   signIn("google", {
                     callbackUrl: "/dashboard",
+                    state: JSON.stringify({ userType: "OWNER" }),
                   })
                 }
               >
                 <IconBrandGoogle className="mr-2 h-4 w-4" />
-                Sign in with Google
+                Sign up with Google
               </Button>
               <Button
                 variant="outline"
@@ -176,18 +239,19 @@ export default function SignInPage() {
                 onClick={() =>
                   signIn("discord", {
                     callbackUrl: "/dashboard",
+                    state: JSON.stringify({ userType: "OWNER" }),
                   })
                 }
               >
                 <IconBrandDiscord className="mr-2 h-4 w-4" />
-                Sign in with Discord
+                Sign up with Discord
               </Button>
             </div>
           </div>
           <p className="mt-6 text-center text-muted-foreground text-sm">
-            Don't have an account?{" "}
-            <a href="/signup" className="text-primary hover:underline">
-              Sign up
+            Already have an account?{" "}
+            <a href="/signin" className="text-primary hover:underline">
+              Sign in
             </a>
           </p>
         </CardContent>
